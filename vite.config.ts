@@ -5,13 +5,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
   return {
-    base: '/farmacia-centrale/', // ✅ nome esatto del repo GitHub Pages
+    base: '/farmacia-centrale/', // ✅ nome del repo GitHub Pages
     build: {
-      outDir: 'dist' // ✅ cartella di output
+      outDir: 'dist' // ✅ cartella di output per GitHub Pages
     },
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
+      'process.env.API_KEY': JSON.stringify(env.API_KEY) // ✅ variabile ambientale visibile nel client
     }
   }
 })
+
