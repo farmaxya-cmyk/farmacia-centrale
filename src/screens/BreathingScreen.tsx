@@ -14,9 +14,9 @@ const BreathingScreen = () => {
 
     // Percorsi file locali come richiesto
     const MUSIC_TRACKS = [
-        { label: '🎵 Relax (432Hz Healing)', value: 'audio/432hz_healing.mp3' },
-        { label: '🧠 Mind (Comunicatività)', value: 'audio/Comunicativita.mp3' },
-        { label: '🧘 Introspection (Perdono)', value: 'audio/Perdono.mp3' },
+        { label: '🎵 Relax (432Hz Healing)', value: '/audio/432hz_healing.mp3' },
+        { label: '🧠 Mind (Comunicatività)', value: '/audio/Comunicativita.mp3' },
+        { label: '🧘 Introspection (Perdono)', value: '/audio/Perdono.mp3' },
     ];
 
     const DURATION_OPTIONS = [
