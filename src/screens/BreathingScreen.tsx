@@ -26,6 +26,7 @@ const BreathingScreen = () => {
         { label: '30 Minuti', value: 1800 },
     ];
 
+    // Suono breve e delicato (Ding)
     const CUE_SOUND_URL = "https://cdn.freesound.org/previews/339/339810_5121236-lq.mp3"; 
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
@@ -83,6 +84,7 @@ const BreathingScreen = () => {
     // Helper per suonare il segnale
     const playCue = React.useCallback(() => {
         if (mode === 'closed' && cueRef.current) {
+            // Reset forzato per permettere riproduzioni ravvicinate
             cueRef.current.pause();
             cueRef.current.currentTime = 0;
             // VOLUME ALZATO AL MASSIMO (1.0)
@@ -103,9 +105,10 @@ const BreathingScreen = () => {
         const pattern = BREATHING_PATTERNS[patternKey];
         
         const breathingCycle = () => {
+            // INIZIO INSPIRAZIONE
             setInstruction('Inspira...');
             setScale(1);
-            playCue(); 
+            playCue(); // Segnale inizio inspirazione
 
             cycleTimer.current = setTimeout(() => {
                 if (pattern.hold > 0) {
@@ -113,9 +116,10 @@ const BreathingScreen = () => {
                 }
 
                 cycleTimer.current = setTimeout(() => {
+                    // INIZIO ESPIRAZIONE
                     setInstruction('...espira');
                     setScale(0.6);
-                    playCue(); 
+                    playCue(); // Segnale inizio espirazione
 
                     cycleTimer.current = setTimeout(() => {
                         setCycles(c => c + 1);
@@ -292,6 +296,7 @@ const BreathingScreen = () => {
                 </button>
             </div>
             
+            {/* Background Music Player - KEY prop to force reload on change */}
             <audio 
                 key={musicTrack} 
                 ref={audioRef} 
@@ -302,6 +307,7 @@ const BreathingScreen = () => {
                     console.error("Audio error:", e);
                 }}
             />
+            {/* Cue Sound Player */}
             <audio 
                 ref={cueRef}
                 src={CUE_SOUND_URL}
