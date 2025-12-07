@@ -12,7 +12,6 @@ const BreathingScreen = () => {
       training: { name: '6-6 Allenamento', inhale: 6, hold: 0, exhale: 6, total: 12 },
     };
 
-    // Percorsi relativi per GitHub Pages / Sottocartelle
     const MUSIC_TRACKS = [
         { label: '🎵 Relax (432Hz Healing)', value: 'audio/432hz_healing.mp3' },
         { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
@@ -28,7 +27,7 @@ const BreathingScreen = () => {
 
     // Suono breve e delicato (Ding)
     const CUE_SOUND_URL = "https://cdn.freesound.org/previews/339/339810_5121236-lq.mp3"; 
-    const BASE_MUSIC_VOLUME = 0.2; // Volume base della musica (basso per meditazione)
+    const BASE_MUSIC_VOLUME = 0.2; 
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
     const [patternKey, setPatternKey] = React.useState('coherence');
@@ -42,20 +41,26 @@ const BreathingScreen = () => {
     
     const mainTimer = React.useRef<any>(null);
     const cycleTimer = React.useRef<any>(null);
-    const audioRef = React.useRef<HTMLAudioElement>(null); // Background music
-    const cueRef = React.useRef<HTMLAudioElement>(null); // Signal sound
+    const audioRef = React.useRef<HTMLAudioElement>(null); 
+    const cueRef = React.useRef<HTMLAudioElement>(null); 
     const volumeRestoreTimer = React.useRef<any>(null);
 
-    // Gestione cambio traccia audio senza smontare il componente
+    // Gestione rigorosa del cambio traccia
     React.useEffect(() => {
         if (audioRef.current) {
-            const wasPlaying = !audioRef.current.paused;
-            // Se cambia la traccia, aggiorna src
-            if (audioRef.current.getAttribute('src') !== musicTrack) {
-                audioRef.current.src = musicTrack;
-                audioRef.current.volume = BASE_MUSIC_VOLUME;
-                if (wasPlaying && isActive) {
-                    audioRef.current.play().catch(e => console.log(e));
+            const audioEl = audioRef.current;
+            // Se la sorgente è diversa, aggiornala
+            const currentSrc = audioEl.getAttribute('src');
+            if (currentSrc !== musicTrack) {
+                audioEl.src = musicTrack;
+                audioEl.load(); // Forza il reload del buffer, utile per file pesanti come 432hz
+                audioEl.volume = BASE_MUSIC_VOLUME;
+                
+                if (isActive) {
+                    const playPromise = audioEl.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(e => console.log("Auto-play blocked on track change:", e));
+                    }
                 }
             }
         }
@@ -72,7 +77,7 @@ const BreathingScreen = () => {
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            audioRef.current.volume = 1.0; // Reset volume
+            audioRef.current.volume = 1.0; 
         }
     }, []);
 
@@ -99,16 +104,16 @@ const BreathingScreen = () => {
         return () => clearInterval(mainTimer.current);
     }, [isActive, timeLeft, stopExercise]);
 
-    // Helper per suonare il segnale con tecnica "Ducking" aggressiva
+    // Hard Ducking Logic
     const playCue = React.useCallback(() => {
         if (mode === 'closed' && cueRef.current) {
             
-            // 1. HARD DUCKING: Zittisci immediatamente la musica
+            // 1. HARD DUCKING: Muto immediato alla musica
             if (audioRef.current) {
                 audioRef.current.volume = 0.0; 
             }
 
-            // Cancella eventuali timer precedenti per evitare che il volume torni su mentre parla ancora
+            // Cancella timer precedenti
             if (volumeRestoreTimer.current) {
                 clearTimeout(volumeRestoreTimer.current);
             }
@@ -124,10 +129,9 @@ const BreathingScreen = () => {
                 });
             }
 
-            // 3. RESTORE: Ripristina dopo 2.5 secondi (durata abbondante del ding)
+            // 3. RESTORE: Ripristina dopo 2.5 secondi
             volumeRestoreTimer.current = setTimeout(() => {
                 if (audioRef.current && isActive) {
-                    // Transizione fluida opzionale o scatto
                     audioRef.current.volume = BASE_MUSIC_VOLUME;
                 }
             }, 2500);
@@ -140,10 +144,10 @@ const BreathingScreen = () => {
         const pattern = BREATHING_PATTERNS[patternKey];
         
         const breathingCycle = () => {
-            // INIZIO INSPIRAZIONE
+            // INSPIRAZIONE
             setInstruction('Inspira...');
             setScale(1);
-            playCue(); // Segnale inizio inspirazione
+            playCue(); 
 
             cycleTimer.current = setTimeout(() => {
                 if (pattern.hold > 0) {
@@ -151,10 +155,10 @@ const BreathingScreen = () => {
                 }
 
                 cycleTimer.current = setTimeout(() => {
-                    // INIZIO ESPIRAZIONE
+                    // ESPIRAZIONE
                     setInstruction('...espira');
                     setScale(0.6);
-                    playCue(); // Segnale inizio espirazione
+                    playCue();
 
                     cycleTimer.current = setTimeout(() => {
                         setCycles(c => c + 1);
@@ -328,7 +332,6 @@ const BreathingScreen = () => {
                 </button>
             </div>
             
-            {/* Background Music Player - No Key to prevent re-mounting */}
             <audio 
                 ref={audioRef} 
                 loop
@@ -337,7 +340,6 @@ const BreathingScreen = () => {
                     console.error("Audio error:", e);
                 }}
             />
-            {/* Cue Sound Player */}
             <audio 
                 ref={cueRef}
                 src={CUE_SOUND_URL}
