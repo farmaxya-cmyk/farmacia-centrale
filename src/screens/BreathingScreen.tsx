@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { LungIcon } from '../components/icons/LungIcon';
 import { EyeIcon } from '../components/icons/EyeIcon';
@@ -49,10 +50,13 @@ const BreathingScreen = () => {
     React.useEffect(() => {
         if (audioRef.current) {
             const wasPlaying = !audioRef.current.paused;
-            audioRef.current.src = musicTrack;
-            audioRef.current.volume = BASE_MUSIC_VOLUME;
-            if (wasPlaying && isActive) {
-                audioRef.current.play().catch(e => console.log(e));
+            // Se cambia la traccia, aggiorna src
+            if (audioRef.current.getAttribute('src') !== musicTrack) {
+                audioRef.current.src = musicTrack;
+                audioRef.current.volume = BASE_MUSIC_VOLUME;
+                if (wasPlaying && isActive) {
+                    audioRef.current.play().catch(e => console.log(e));
+                }
             }
         }
     }, [musicTrack, isActive]);
