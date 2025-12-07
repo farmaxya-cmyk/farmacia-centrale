@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { marked } from 'marked';
 import { DownloadIcon } from '../components/icons/DownloadIcon';
@@ -16,7 +17,8 @@ const ResultsScreen = ({ assessment, score, onRetake, onBackToHome }) => {
             `Analisi:\n${result.summary}\n\n` +
             `Nota: Questo documento è generato automaticamente e non sostituisce un parere medico professionale.`;
 
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        // Add Byte Order Mark (BOM) for correct UTF-8 interpretation in Excel/Windows
+        const blob = new Blob(["\uFEFF" + content], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
