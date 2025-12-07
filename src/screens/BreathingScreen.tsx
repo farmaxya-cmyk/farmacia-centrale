@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LungIcon } from '../components/icons/LungIcon';
 import { EyeIcon } from '../components/icons/EyeIcon';
@@ -28,6 +27,7 @@ const BreathingScreen = () => {
 
     // Suono breve e delicato (Ding)
     const CUE_SOUND_URL = "https://cdn.freesound.org/previews/339/339810_5121236-lq.mp3"; 
+    const BASE_MUSIC_VOLUME = 0.2; // Volume base della musica (basso per meditazione)
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
     const [patternKey, setPatternKey] = React.useState('coherence');
@@ -43,19 +43,32 @@ const BreathingScreen = () => {
     const cycleTimer = React.useRef<any>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null); // Background music
     const cueRef = React.useRef<HTMLAudioElement>(null); // Signal sound
+    const volumeRestoreTimer = React.useRef<any>(null);
+
+    // Gestione cambio traccia audio senza smontare il componente
+    React.useEffect(() => {
+        if (audioRef.current) {
+            const wasPlaying = !audioRef.current.paused;
+            audioRef.current.src = musicTrack;
+            audioRef.current.volume = BASE_MUSIC_VOLUME;
+            if (wasPlaying && isActive) {
+                audioRef.current.play().catch(e => console.log(e));
+            }
+        }
+    }, [musicTrack, isActive]);
 
     const stopExercise = React.useCallback(() => {
         setIsActive(false);
         clearInterval(mainTimer.current);
         clearTimeout(cycleTimer.current);
+        clearTimeout(volumeRestoreTimer.current);
         setInstruction('Inizia');
         setScale(0.6);
         
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            // Ripristina volume normale quando in pausa
-            audioRef.current.volume = 1.0;
+            audioRef.current.volume = 1.0; // Reset volume
         }
     }, []);
 
@@ -63,6 +76,7 @@ const BreathingScreen = () => {
         return () => {
             clearInterval(mainTimer.current);
             clearTimeout(cycleTimer.current);
+            clearTimeout(volumeRestoreTimer.current);
             if (audioRef.current) {
                 audioRef.current.pause();
             }
@@ -81,16 +95,21 @@ const BreathingScreen = () => {
         return () => clearInterval(mainTimer.current);
     }, [isActive, timeLeft, stopExercise]);
 
-    // Helper per suonare il segnale con tecnica "Ducking" (abbassa musica mentre suona)
+    // Helper per suonare il segnale con tecnica "Ducking" aggressiva
     const playCue = React.useCallback(() => {
         if (mode === 'closed' && cueRef.current) {
-            // 1. DUCKING: Zittisci completamente la musica di sottofondo
+            
+            // 1. HARD DUCKING: Zittisci immediatamente la musica
             if (audioRef.current) {
                 audioRef.current.volume = 0.0; 
             }
 
-            // 2. PLAY CUE: Suona il ding al massimo volume
-            cueRef.current.pause();
+            // Cancella eventuali timer precedenti per evitare che il volume torni su mentre parla ancora
+            if (volumeRestoreTimer.current) {
+                clearTimeout(volumeRestoreTimer.current);
+            }
+
+            // 2. PLAY CUE
             cueRef.current.currentTime = 0;
             cueRef.current.volume = 1.0; 
             
@@ -101,15 +120,15 @@ const BreathingScreen = () => {
                 });
             }
 
-            // 3. RESTORE: Ripristina il volume della musica dopo 1.5 secondi (durata del ding)
-            setTimeout(() => {
-                // Controlla che l'esercizio sia ancora attivo e l'audio stia suonando
-                if (audioRef.current && !audioRef.current.paused) {
-                    audioRef.current.volume = 0.1; // Ripristina al livello basso di sottofondo
+            // 3. RESTORE: Ripristina dopo 2.5 secondi (durata abbondante del ding)
+            volumeRestoreTimer.current = setTimeout(() => {
+                if (audioRef.current && isActive) {
+                    // Transizione fluida opzionale o scatto
+                    audioRef.current.volume = BASE_MUSIC_VOLUME;
                 }
-            }, 1500);
+            }, 2500);
         }
-    }, [mode]);
+    }, [mode, isActive]);
 
     React.useEffect(() => {
         if (!isActive) return;
@@ -155,8 +174,7 @@ const BreathingScreen = () => {
             setIsActive(true);
             
             if (audioRef.current) {
-                // VOLUME BASSO (0.1) durante l'esercizio per far risaltare il Ding
-                audioRef.current.volume = 0.1;
+                audioRef.current.volume = BASE_MUSIC_VOLUME;
                 const playPromise = audioRef.current.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
@@ -261,8 +279,6 @@ const BreathingScreen = () => {
                             {MUSIC_TRACKS.map(track => <option key={track.value} value={track.value}>{track.label}</option>)}
                         </select>
                     </div>
-                    {/* DEBUG PATH */}
-                    <p className="text-[10px] text-slate-300 text-center">Path: {musicTrack}</p>
                 </div>
 
                 {/* Visualization */}
@@ -308,11 +324,9 @@ const BreathingScreen = () => {
                 </button>
             </div>
             
-            {/* Background Music Player - KEY prop to force reload on change */}
+            {/* Background Music Player - No Key to prevent re-mounting */}
             <audio 
-                key={musicTrack} 
                 ref={audioRef} 
-                src={musicTrack}
                 loop
                 preload="auto"
                 onError={(e) => {
