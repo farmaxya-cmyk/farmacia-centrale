@@ -143,7 +143,7 @@ const BreathingScreen = () => {
             if (audioRef.current) {
                 // Abbassiamo il volume della musica di sottofondo al 50%
                 // per far risaltare il suono guida (Ding)
-                audioRef.current.volume = 0.5;
+                audioRef.current.volume = 0.1;
                 const playPromise = audioRef.current.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
