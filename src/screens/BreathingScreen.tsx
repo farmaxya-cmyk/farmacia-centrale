@@ -1,7 +1,9 @@
+
 import React from 'react';
 import { LungIcon } from '../components/icons/LungIcon';
 import { EyeIcon } from '../components/icons/EyeIcon';
 import { EyeOffIcon } from '../components/icons/EyeOffIcon';
+import { XCircleIcon } from '../components/icons/XCircleIcon';
 
 const BreathingScreen = () => {
     const BREATHING_PATTERNS = {
@@ -24,9 +26,8 @@ const BreathingScreen = () => {
         { label: '30 Minuti', value: 1800 },
     ];
 
-    // Path del file locale
+    // File locale obbligatorio
     const CUE_SOUND_URL = "audio/ding.mp3"; 
-    
     const BASE_MUSIC_VOLUME = 0.2; 
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
@@ -38,13 +39,15 @@ const BreathingScreen = () => {
     const [instruction, setInstruction] = React.useState('Inizia');
     const [scale, setScale] = React.useState(0.6);
     const [mode, setMode] = React.useState<'open' | 'closed'>('open');
+    const [audioError, setAudioError] = React.useState<string | null>(null);
     
     const mainTimer = React.useRef<any>(null);
     const cycleTimer = React.useRef<any>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null); 
     const cueRef = React.useRef<HTMLAudioElement>(null); 
+    const audioCtxRef = React.useRef<AudioContext | null>(null);
 
-    // Gestione cambio traccia
+    // Gestione cambio traccia musica
     React.useEffect(() => {
         if (audioRef.current) {
             const audioEl = audioRef.current;
@@ -53,7 +56,7 @@ const BreathingScreen = () => {
             if (currentSrc !== musicTrack) {
                 audioEl.pause();
                 audioEl.src = musicTrack;
-                audioEl.load(); // Reset buffer
+                audioEl.load();
                 audioEl.volume = BASE_MUSIC_VOLUME;
                 
                 if (isActive) {
@@ -69,6 +72,7 @@ const BreathingScreen = () => {
         clearTimeout(cycleTimer.current);
         setInstruction('Inizia');
         setScale(0.6);
+        setAudioError(null);
         
         if (audioRef.current) {
             audioRef.current.pause();
@@ -82,6 +86,7 @@ const BreathingScreen = () => {
             clearInterval(mainTimer.current);
             clearTimeout(cycleTimer.current);
             if (audioRef.current) audioRef.current.pause();
+            if (audioCtxRef.current) audioCtxRef.current.close();
         };
     }, []);
 
@@ -97,56 +102,103 @@ const BreathingScreen = () => {
         return () => clearInterval(mainTimer.current);
     }, [isActive, timeLeft, stopExercise]);
 
-    // --- NUOVA LOGICA PLAY CUE (EVENT BASED) ---
+    // Generatore di suoni sintetici (Fallback se manca il file)
+    const playSynthDing = () => {
+        try {
+            if (!audioCtxRef.current) {
+                audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            const ctx = audioCtxRef.current;
+            if (ctx.state === 'suspended') ctx.resume();
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+            osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.1); // Salita veloce
+
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5); // Decay lungo
+
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 1.5);
+        } catch (e) {
+            console.error("Synth fallito", e);
+        }
+    };
+
+    // --- LOGICA PLAY CUE ROBUSTA ---
     const playCue = React.useCallback(() => {
-        if (mode === 'closed' && cueRef.current) {
+        if (mode === 'closed') {
             const musicEl = audioRef.current;
             const cueEl = cueRef.current;
 
-            // 1. Zittisci musica istantaneamente
+            // 1. Zittisci musica
             if (musicEl) musicEl.volume = 0.0;
 
-            // 2. Prepara il suono
-            cueEl.currentTime = 0;
-            cueEl.volume = 1.0;
-
-            // 3. Gestisci la fine del suono per ripristinare la musica
-            // Questo è meglio del setTimeout perché si adatta alla durata reale del file mp3
-            cueEl.onended = () => {
+            const restoreMusic = () => {
                 if (musicEl && isActive) {
                     musicEl.volume = BASE_MUSIC_VOLUME;
                 }
             };
 
-            // 4. Riproduci
-            cueEl.play().catch(error => {
-                console.warn("Ding play failed:", error);
-                // Se il ding fallisce, ripristina subito la musica per non lasciare silenzio
-                if (musicEl) musicEl.volume = BASE_MUSIC_VOLUME;
-            });
+            let playedFile = false;
+
+            // 2. Prova a suonare il file
+            if (cueEl) {
+                cueEl.currentTime = 0;
+                cueEl.volume = 1.0;
+                
+                // Imposta onended PRIMA del play
+                cueEl.onended = () => {
+                    restoreMusic();
+                };
+
+                const playPromise = cueEl.play();
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            playedFile = true;
+                            setAudioError(null); // Reset errore se funziona
+                        })
+                        .catch(error => {
+                            console.warn("File ding non riproducibile:", error);
+                            setAudioError("File 'audio/ding.mp3' non trovato o bloccato. Uso suono di riserva.");
+                            playSynthDing(); // Usa synth
+                        });
+                }
+            } else {
+                playSynthDing();
+            }
+
+            // 3. Timer di SICUREZZA: Ripristina il volume in ogni caso dopo 2.5s
+            // Questo risolve il problema "poi non si sente più" se onEnded non parte
+            setTimeout(() => {
+                restoreMusic();
+            }, 2500);
         }
     }, [mode, isActive]);
 
-    // Ciclo Respiratorio
     React.useEffect(() => {
         if (!isActive) return;
 
         const pattern = BREATHING_PATTERNS[patternKey];
         
         const breathingCycle = () => {
-            // INSPIRAZIONE
             setInstruction('Inspira...');
             setScale(1);
             playCue(); 
 
             cycleTimer.current = setTimeout(() => {
-                // TRATTENIMENTO
                 if (pattern.hold > 0) {
                     setInstruction('Trattieni');
                 }
 
                 cycleTimer.current = setTimeout(() => {
-                    // ESPIRAZIONE
                     setInstruction('...espira');
                     setScale(0.6);
                     playCue(); 
@@ -171,11 +223,15 @@ const BreathingScreen = () => {
             setTimeLeft(duration);
             setCycles(0);
             setIsActive(true);
+            setAudioError(null);
             
-            // Primo play utente per sbloccare l'audio context
+            // Sblocca audio context
             if (audioRef.current) {
                 audioRef.current.volume = BASE_MUSIC_VOLUME;
                 audioRef.current.play().catch(e => alert("Impossibile riprodurre musica. Verifica i permessi audio."));
+            }
+            if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+                audioCtxRef.current.resume();
             }
         }
     };
@@ -201,6 +257,14 @@ const BreathingScreen = () => {
                 
                 <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 mb-8 space-y-4">
                     
+                    {/* Error Display */}
+                    {audioError && (
+                        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm animate-pulse">
+                            <XCircleIcon className="w-5 h-5 flex-shrink-0" />
+                            <span>{audioError}</span>
+                        </div>
+                    )}
+
                     {/* Mode Selection */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
                         <label className="text-sm font-bold text-slate-600 uppercase flex items-center gap-2 pl-2">
@@ -332,10 +396,9 @@ const BreathingScreen = () => {
                 ref={cueRef}
                 src={CUE_SOUND_URL}
                 preload="auto"
-                onError={(e) => {
-                    console.error("Errore caricamento ding.mp3", e);
-                    // Solo se siamo attivi avvisiamo l'utente, per evitare alert al caricamento pagina
-                    if (isActive) alert("ATTENZIONE: File 'audio/ding.mp3' non trovato! Assicurati di averlo caricato nella cartella corretta.");
+                onError={() => {
+                    // Non mostriamo l'alert qui perché lo gestiamo nella logica playCue con il fallback
+                    console.warn("File ding non trovato al caricamento iniziale");
                 }}
             />
         </div>
