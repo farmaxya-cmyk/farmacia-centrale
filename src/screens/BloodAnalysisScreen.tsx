@@ -1,13 +1,14 @@
+
 import React from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { UploadCloudIcon } from '../components/icons/UploadCloudIcon';
 import { SparklesIcon } from '../components/icons/SparklesIcon';
 import { XCircleIcon } from '../components/icons/XCircleIcon';
 import { FileTextIcon } from '../components/icons/FileTextIcon';
+import { DownloadIcon } from '../components/icons/DownloadIcon';
 import { marked } from 'marked';
 
 // Helper function to convert file to base64
-// FIX: Added File type to the file parameter and specified the Promise should resolve to a string, ensuring the data passed to the API is correctly typed.
 const fileToGenerativePart = async (file: File) => {
     const base64EncodedDataPromise = new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -41,7 +42,6 @@ const ErrorMessage = ({ message }) => (
 );
 
 const BloodAnalysisScreen = ({ user }) => {
-    // FIX: Typed the image state to be a File or null.
     const [image, setImage] = React.useState<File | null>(null);
     const [imagePreview, setImagePreview] = React.useState('');
     const [analysis, setAnalysis] = React.useState('');
@@ -49,7 +49,6 @@ const BloodAnalysisScreen = ({ user }) => {
     const [error, setError] = React.useState('');
 
     React.useEffect(() => {
-        // Clean up the object URL when the component unmounts or the image preview changes
         return () => {
             if (imagePreview) {
                 URL.revokeObjectURL(imagePreview);
@@ -57,7 +56,6 @@ const BloodAnalysisScreen = ({ user }) => {
         };
     }, [imagePreview]);
     
-    // FIX: Added type for the event object.
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -118,6 +116,27 @@ const BloodAnalysisScreen = ({ user }) => {
         setIsLoading(false);
     };
 
+    const handleDownloadTxt = () => {
+        if (!analysis) return;
+        const date = new Date().toLocaleDateString('it-IT');
+        const content = `CLINICAL WELLNESS SPA - ANALISI REFERTO AI\n` +
+            `Data Analisi: ${date}\n\n` +
+            `----------------------------------------\n\n` +
+            `${analysis}\n\n` +
+            `----------------------------------------\n` +
+            `Generato da Clinical Wellness Spa App`;
+
+        // Add Byte Order Mark (BOM)
+        const blob = new Blob(["\uFEFF" + content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Analisi_Referto_${date.replace(/\//g, '-')}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="p-4 md:p-8 animate-fade-in">
             <h1 className="text-4xl font-bold text-slate-800 mb-2">Analisi Referti Sanguigni con AI</h1>
@@ -132,22 +151,29 @@ const BloodAnalysisScreen = ({ user }) => {
                         <div className="relative border-2 border-dashed border-slate-300 rounded-lg p-12 text-center flex-grow flex flex-col justify-center">
                             <input
                                 type="file"
-                                accept="image/*"
+                                accept="image/*,.pdf"
                                 onChange={handleFileChange}
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                 aria-label="Carica file"
                             />
-                            <div className="flex flex-col items-center text-slate-500">
+                             <div className="flex flex-col items-center text-slate-500 pointer-events-none">
                                 <UploadCloudIcon className="w-12 h-12 mb-2" />
                                 <p className="font-semibold">Trascina un file qui o clicca per caricare</p>
-                                <p className="text-sm">PNG, JPG, WEBP, HEIC</p>
+                                <p className="text-sm">Immagini (PNG, JPG) o PDF</p>
                             </div>
                         </div>
                     ) : (
                         <div className="mt-4 flex flex-col flex-grow">
-                             <p className="text-sm font-medium text-slate-600 mb-2">Anteprima immagine:</p>
-                            <div className="flex-grow mb-4">
-                                <img src={imagePreview} alt="Anteprima referto" className="w-full h-full max-h-96 object-contain rounded-lg border border-slate-200" />
+                             <p className="text-sm font-medium text-slate-600 mb-2">Anteprima:</p>
+                             <div className="flex-grow mb-4 flex items-center justify-center bg-slate-100 rounded-lg">
+                                {image?.type.startsWith('image/') ? (
+                                    <img src={imagePreview} alt="Anteprima referto" className="max-w-full max-h-96 object-contain rounded-lg" />
+                                ) : (
+                                    <div className="p-4 text-center">
+                                    <FileTextIcon className="w-16 h-16 mx-auto text-slate-500"/>
+                                    <p className="mt-2 font-semibold text-slate-700">{image?.name}</p>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 mt-auto">
                                  <button
@@ -171,13 +197,24 @@ const BloodAnalysisScreen = ({ user }) => {
                 </div>
 
                 {/* Analysis Result Column */}
-                <div className="bg-white p-6 rounded-2xl shadow-lg">
-                    <h2 className="text-2xl font-bold text-slate-700 mb-4">2. Risultati dell'Analisi</h2>
+                <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-2xl font-bold text-slate-700">2. Risultati dell'Analisi</h2>
+                        {analysis && (
+                            <button
+                                onClick={handleDownloadTxt}
+                                className="flex items-center gap-2 text-sm font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                                <DownloadIcon className="w-4 h-4" /> Scarica .txt
+                            </button>
+                        )}
+                    </div>
+                    
                      {isLoading && <Loader text="L'intelligenza artificiale sta analizzando il tuo documento..." />}
                      {error && <ErrorMessage message={error} />}
                      {analysis && (
                         <div 
-                            className="prose max-w-none text-slate-700 animate-fade-in"
+                            className="prose max-w-none text-slate-700 animate-fade-in flex-grow overflow-y-auto max-h-[600px]"
                             dangerouslySetInnerHTML={{ __html: marked.parse(analysis) as string }}
                         ></div>
                      )}
