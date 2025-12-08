@@ -14,9 +14,10 @@ const BreathingScreen = () => {
 
     // Ordine modificato: Introspection per primo (Default), Mind secondo, Relax ultimo.
     const MUSIC_TRACKS = [
-        { label: '🧘 Introspection (Profondità)', value: 'audio/Perdono.mp3' },
-        { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
+        
         { label: '🎵 Relax (432Hz Healing)', value: 'audio/432hz_healing.mp3' },
+        { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
+        { label: '🧘 Introspection (Profondità)', value: 'audio/Perdono.mp3' },
     ];
 
     const DURATION_OPTIONS = [
@@ -30,7 +31,7 @@ const BreathingScreen = () => {
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
     const [patternKey, setPatternKey] = React.useState('coherence');
-    // Default seleziona il primo elemento (Introspection)
+    // Default seleziona il primo elemento (Relax)
     const [musicTrack, setMusicTrack] = React.useState(MUSIC_TRACKS[0].value);
     const [isActive, setIsActive] = React.useState(false);
     const [timeLeft, setTimeLeft] = React.useState(DURATION_OPTIONS[0].value);
@@ -158,7 +159,7 @@ const BreathingScreen = () => {
         const musicEl = audioRef.current;
         
         // 1. Zittisci musica istantaneamente
-        if (musicEl) musicEl.volume = 0.0;
+        if (musicEl) musicEl.volume = 0.9;
 
         const restoreMusic = () => {
             // 2. Ripristina musica quando il ding finisce
