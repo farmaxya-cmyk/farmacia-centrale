@@ -12,11 +12,11 @@ const BreathingScreen = () => {
       training: { name: '6-6 Allenamento', inhale: 6, hold: 0, exhale: 6, total: 12 },
     };
 
-    // Ordine modificato: Introspection per primo (Default), Mind secondo, Relax ultimo.
+    // Ordine ripristinato: Relax (432Hz) primo, Introspection ultimo.
     const MUSIC_TRACKS = [
-        { label: '🧘 Introspection (Profondità)', value: 'audio/Perdono.mp3' },
-        { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
         { label: '🎵 Relax (432Hz Healing)', value: 'audio/432hz_healing.mp3' },
+        { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
+        { label: '🧘 Introspection (Profondità)', value: 'audio/Perdono.mp3' },
     ];
 
     const DURATION_OPTIONS = [
@@ -26,11 +26,8 @@ const BreathingScreen = () => {
         { label: '30 Minuti', value: 1800 },
     ];
 
-    const BASE_MUSIC_VOLUME = 0.2; 
-
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
     const [patternKey, setPatternKey] = React.useState('coherence');
-    // Default seleziona il primo elemento (Introspection)
     const [musicTrack, setMusicTrack] = React.useState(MUSIC_TRACKS[0].value);
     const [isActive, setIsActive] = React.useState(false);
     const [timeLeft, setTimeLeft] = React.useState(DURATION_OPTIONS[0].value);
@@ -39,10 +36,21 @@ const BreathingScreen = () => {
     const [scale, setScale] = React.useState(0.6);
     const [mode, setMode] = React.useState<'open' | 'closed'>('open');
     
+    // Nuovi stati per il controllo del volume
+    const [musicVolume, setMusicVolume] = React.useState(0.5); // Default 50%
+    const [dingVolume, setDingVolume] = React.useState(0.8);   // Default 80%
+    
     const mainTimer = React.useRef<any>(null);
     const cycleTimer = React.useRef<any>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null); 
     const audioCtxRef = React.useRef<AudioContext | null>(null);
+
+    // Aggiorna il volume della musica in tempo reale quando lo slider cambia
+    React.useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.volume = musicVolume;
+        }
+    }, [musicVolume]);
 
     // Gestione cambio traccia musica
     React.useEffect(() => {
@@ -54,14 +62,14 @@ const BreathingScreen = () => {
                 audioEl.pause();
                 audioEl.src = musicTrack;
                 audioEl.load();
-                audioEl.volume = BASE_MUSIC_VOLUME;
+                audioEl.volume = musicVolume;
                 
                 if (isActive) {
                     audioEl.play().catch(e => console.log("Play error on track change:", e));
                 }
             }
         }
-    }, [musicTrack, isActive]);
+    }, [musicTrack, isActive]); // Rimosso musicVolume dalle dipendenze qui per evitare reload, gestito sopra
 
     const stopExercise = React.useCallback(() => {
         setIsActive(false);
@@ -73,7 +81,7 @@ const BreathingScreen = () => {
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            audioRef.current.volume = BASE_MUSIC_VOLUME; 
+            // Il volume rimane quello impostato dall'utente, non lo resettiamo
         }
     }, []);
 
@@ -98,8 +106,8 @@ const BreathingScreen = () => {
         return () => clearInterval(mainTimer.current);
     }, [isActive, timeLeft, stopExercise]);
 
-    // --- SYNTH PURO POTENZIATO (Volume Alto) ---
-    const playSynthDing = React.useCallback(async (onComplete?: () => void) => {
+    // --- SYNTH PURO (Volume dinamico) ---
+    const playSynthDing = React.useCallback(async () => {
         try {
             let ctx = audioCtxRef.current;
             if (!ctx) {
@@ -130,45 +138,28 @@ const BreathingScreen = () => {
             osc2.frequency.setValueAtTime(1200, t); // 3a armonica
 
             // Volume Envelope (Attacco immediato, decadimento lento)
-            // Volume alzato a 0.8 per essere MOLTO ben udibile
+            // Usa lo stato dingVolume
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.8, t + 0.05); 
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2); // Durata totale suono ca 1.2s
+            gain.gain.linearRampToValueAtTime(dingVolume, t + 0.05); 
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2); 
 
             osc1.start(t);
             osc2.start(t);
             osc1.stop(t + 1.2);
             osc2.stop(t + 1.2);
             
-            // Quando l'oscillatore principale finisce, ripristina la musica
-            osc1.onended = () => {
-                if (onComplete) onComplete();
-            };
-            
         } catch (e) {
             console.error("Synth errore:", e);
-            if (onComplete) onComplete(); // Fallback per non bloccare la musica a 0
         }
-    }, []);
+    }, [dingVolume]); // Dipende dal volume impostato
 
     const playCue = React.useCallback(async () => {
         // Suona solo se siamo in modalità guidata (closed eyes) e attivi
         if (mode !== 'closed' || !isActive) return;
 
-        const musicEl = audioRef.current;
-        
-        // 1. Zittisci musica istantaneamente
-        if (musicEl) musicEl.volume = 0.0;
-
-        const restoreMusic = () => {
-            // 2. Ripristina musica quando il ding finisce
-            if (musicEl && isActive) {
-                musicEl.volume = BASE_MUSIC_VOLUME;
-            }
-        };
-
-        // 3. Suona il Synth
-        playSynthDing(restoreMusic);
+        // RIMOSSO IL DUCKING (abbassamento musica)
+        // La musica continua al suo volume, il ding suona sopra.
+        playSynthDing();
     }, [mode, isActive, playSynthDing]);
 
     React.useEffect(() => {
@@ -214,7 +205,7 @@ const BreathingScreen = () => {
             
             // Inizializza/Sblocca audio context al click utente
             if (audioRef.current) {
-                audioRef.current.volume = BASE_MUSIC_VOLUME;
+                audioRef.current.volume = musicVolume;
                 audioRef.current.play().catch(e => alert("Impossibile riprodurre musica. Verifica i permessi audio."));
             }
             if (!audioCtxRef.current) {
@@ -272,7 +263,6 @@ const BreathingScreen = () => {
                         </div>
                     </div>
                     {mode === 'open' && <p className="text-xs text-slate-400 text-center italic">In modalità Visiva i segnali acustici ("Ding") sono disattivati.</p>}
-                    {mode === 'closed' && <p className="text-xs text-sky-600 text-center italic font-medium">In modalità Guidata la musica si abbassa automaticamente.</p>}
 
                     {/* Duration */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -320,6 +310,32 @@ const BreathingScreen = () => {
                         >
                             {MUSIC_TRACKS.map(track => <option key={track.value} value={track.value}>{track.label}</option>)}
                         </select>
+                    </div>
+
+                    {/* Volume Controls */}
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                            <label htmlFor="music-vol" className="text-xs font-bold text-slate-600 uppercase w-20">Musica</label>
+                            <input 
+                                id="music-vol" 
+                                type="range" 
+                                min="0" max="1" step="0.01" 
+                                value={musicVolume} 
+                                onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                            />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                            <label htmlFor="ding-vol" className="text-xs font-bold text-slate-600 uppercase w-20">Segnale</label>
+                            <input 
+                                id="ding-vol" 
+                                type="range" 
+                                min="0" max="1" step="0.01" 
+                                value={dingVolume} 
+                                onChange={(e) => setDingVolume(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                            />
+                        </div>
                     </div>
                 </div>
 
