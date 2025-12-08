@@ -12,10 +12,12 @@ const BreathingScreen = () => {
       training: { name: '6-6 Allenamento', inhale: 6, hold: 0, exhale: 6, total: 12 },
     };
 
+    // Ordine modificato come richiesto: Introspection per primo, 432Hz per ultimo.
+    // Ho ripristinato l'associazione corretta tra Etichetta e File (es. 432Hz -> 432hz_healing.mp3).
     const MUSIC_TRACKS = [
-        { label: '🎵 Relax (432Hz Healing)', value: 'audio/432hz_healing.mp3' },
-        { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
         { label: '🧘 Introspection (Profondità)', value: 'audio/Perdono.mp3' },
+        { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
+        { label: '🎵 Relax (432Hz Healing)', value: 'audio/432hz_healing.mp3' },
     ];
 
     const DURATION_OPTIONS = [
@@ -29,6 +31,7 @@ const BreathingScreen = () => {
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
     const [patternKey, setPatternKey] = React.useState('coherence');
+    // Default seleziona il primo elemento (ora Introspection)
     const [musicTrack, setMusicTrack] = React.useState(MUSIC_TRACKS[0].value);
     const [isActive, setIsActive] = React.useState(false);
     const [timeLeft, setTimeLeft] = React.useState(DURATION_OPTIONS[0].value);
