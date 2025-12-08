@@ -44,7 +44,7 @@ const BreathingScreen = () => {
     const mainTimer = React.useRef<any>(null);
     const cycleTimer = React.useRef<any>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null); 
-    const cueRef = React.useRef<HTMLAudioElement>(null); 
+    // const cueRef = React.useRef<HTMLAudioElement>(null); // RIMOSSO: Usiamo istanze volatili
     const audioCtxRef = React.useRef<AudioContext | null>(null);
 
     // Gestione cambio traccia musica
@@ -103,7 +103,7 @@ const BreathingScreen = () => {
     }, [isActive, timeLeft, stopExercise]);
 
     // Generatore di suoni sintetici (Fallback se manca il file)
-    const playSynthDing = () => {
+    const playSynthDing = (onComplete?: () => void) => {
         try {
             if (!audioCtxRef.current) {
                 audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -119,25 +119,30 @@ const BreathingScreen = () => {
 
             osc.type = 'sine';
             osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-            osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.1); // Salita veloce
+            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1); 
 
-            gain.gain.setValueAtTime(0.2, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5); // Decay lungo
+            // Volume più alto per il synth (0.5 è molto forte per un'onda pura)
+            gain.gain.setValueAtTime(0.5, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
 
             osc.start(ctx.currentTime);
             osc.stop(ctx.currentTime + 1.5);
+            
+            osc.onended = () => {
+                if (onComplete) onComplete();
+            };
         } catch (e) {
             console.error("Synth fallito", e);
+            if (onComplete) onComplete();
         }
     };
 
-    // --- LOGICA PLAY CUE ROBUSTA ---
+    // --- LOGICA PLAY CUE "FRESH INSTANCE" ---
     const playCue = React.useCallback(() => {
         if (mode === 'closed') {
             const musicEl = audioRef.current;
-            const cueEl = cueRef.current;
-
-            // 1. Zittisci musica
+            
+            // 1. DUCKING: Musica a 0
             if (musicEl) musicEl.volume = 0.0;
 
             const restoreMusic = () => {
@@ -146,39 +151,34 @@ const BreathingScreen = () => {
                 }
             };
 
-            let playedFile = false;
+            // 2. Crea nuova istanza Audio (Bypassa problemi di buffer/decoder su file pesanti)
+            const ding = new Audio(CUE_SOUND_URL);
+            ding.volume = 1.0; // Max volume
 
-            // 2. Prova a suonare il file
-            if (cueEl) {
-                cueEl.currentTime = 0;
-                cueEl.volume = 1.0;
-                
-                // Imposta onended PRIMA del play
-                cueEl.onended = () => {
-                    restoreMusic();
-                };
-
-                const playPromise = cueEl.play();
-                if (playPromise !== undefined) {
-                    playPromise
-                        .then(() => {
-                            playedFile = true;
-                            setAudioError(null); // Reset errore se funziona
-                        })
-                        .catch(error => {
-                            console.warn("File ding non riproducibile:", error);
-                            setAudioError("File 'audio/ding.mp3' non trovato o bloccato. Uso suono di riserva.");
-                            playSynthDing(); // Usa synth
-                        });
-                }
-            } else {
-                playSynthDing();
-            }
-
-            // 3. Timer di SICUREZZA: Ripristina il volume in ogni caso dopo 2.5s
-            // Questo risolve il problema "poi non si sente più" se onEnded non parte
-            setTimeout(() => {
+            // Gestione fine suono
+            ding.onended = () => {
                 restoreMusic();
+                // Non serve chiamare remove(), il garbage collector pulirà l'oggetto Audio
+            };
+
+            // Gestione errori (es. file non trovato) -> Fallback su Synth
+            ding.onerror = () => {
+                console.warn("Ding file error, switching to synth");
+                playSynthDing(restoreMusic);
+            };
+
+            // Riproduzione
+            ding.play().catch(e => {
+                console.warn("Autoplay ding bloccato o file mancante, uso synth", e);
+                // Se bloccato, prova il synth
+                playSynthDing(restoreMusic);
+            });
+
+            // 3. Safety Net: Se tutto si blocca, ripristina volume dopo 2.5s
+            setTimeout(() => {
+                if (musicEl && musicEl.volume === 0.0 && isActive) {
+                    musicEl.volume = BASE_MUSIC_VOLUME;
+                }
             }, 2500);
         }
     }, [mode, isActive]);
@@ -390,16 +390,6 @@ const BreathingScreen = () => {
                 loop
                 preload="auto"
                 onError={(e) => console.error("Errore background music", e)}
-            />
-            {/* Cue Sound Player */}
-            <audio 
-                ref={cueRef}
-                src={CUE_SOUND_URL}
-                preload="auto"
-                onError={() => {
-                    // Non mostriamo l'alert qui perché lo gestiamo nella logica playCue con il fallback
-                    console.warn("File ding non trovato al caricamento iniziale");
-                }}
             />
         </div>
     );
