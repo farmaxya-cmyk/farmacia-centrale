@@ -12,8 +12,7 @@ const BreathingScreen = () => {
       training: { name: '6-6 Allenamento', inhale: 6, hold: 0, exhale: 6, total: 12 },
     };
 
-    // Ordine modificato come richiesto: Introspection per primo, 432Hz per ultimo.
-    // Ho ripristinato l'associazione corretta tra Etichetta e File (es. 432Hz -> 432hz_healing.mp3).
+    // Ordine modificato: Introspection per primo (Default), Mind secondo, Relax ultimo.
     const MUSIC_TRACKS = [
         { label: '🧘 Introspection (Profondità)', value: 'audio/Perdono.mp3' },
         { label: '🧠 Mind (Attivazione)', value: 'audio/Comunicativita.mp3' },
@@ -31,7 +30,7 @@ const BreathingScreen = () => {
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
     const [patternKey, setPatternKey] = React.useState('coherence');
-    // Default seleziona il primo elemento (ora Introspection)
+    // Default seleziona il primo elemento (Introspection)
     const [musicTrack, setMusicTrack] = React.useState(MUSIC_TRACKS[0].value);
     const [isActive, setIsActive] = React.useState(false);
     const [timeLeft, setTimeLeft] = React.useState(DURATION_OPTIONS[0].value);
@@ -99,7 +98,7 @@ const BreathingScreen = () => {
         return () => clearInterval(mainTimer.current);
     }, [isActive, timeLeft, stopExercise]);
 
-    // --- NUOVO SINTH PURO (Zero File, Zero Problemi) ---
+    // --- SYNTH PURO POTENZIATO (Volume Alto) ---
     const playSynthDing = React.useCallback(async (onComplete?: () => void) => {
         try {
             let ctx = audioCtxRef.current;
@@ -128,12 +127,12 @@ const BreathingScreen = () => {
             
             // Frequenze per un suono campanello chiaro
             osc1.frequency.setValueAtTime(800, t);
-            osc2.frequency.setValueAtTime(1200, t); // 3a armonica (quinta perfetta sopra)
+            osc2.frequency.setValueAtTime(1200, t); // 3a armonica
 
             // Volume Envelope (Attacco immediato, decadimento lento)
-            // Volume alzato a 0.3 per essere ben udibile
+            // Volume alzato a 0.8 per essere MOLTO ben udibile
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.3, t + 0.05); 
+            gain.gain.linearRampToValueAtTime(0.8, t + 0.05); 
             gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2); // Durata totale suono ca 1.2s
 
             osc1.start(t);
