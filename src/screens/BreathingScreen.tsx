@@ -69,7 +69,7 @@ const BreathingScreen = () => {
                 }
             }
         }
-    }, [musicTrack, isActive]); // Rimosso musicVolume dalle dipendenze qui per evitare reload, gestito sopra
+    }, [musicTrack, isActive]); 
 
     const stopExercise = React.useCallback(() => {
         setIsActive(false);
@@ -81,7 +81,6 @@ const BreathingScreen = () => {
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            // Il volume rimane quello impostato dall'utente, non lo resettiamo
         }
     }, []);
 
@@ -121,9 +120,8 @@ const BreathingScreen = () => {
 
             const t = ctx.currentTime;
 
-            // Ding a 2 onde (più realistico e piacevole)
-            const osc1 = ctx.createOscillator(); // Tono Fondamentale
-            const osc2 = ctx.createOscillator(); // Armonica
+            const osc1 = ctx.createOscillator(); 
+            const osc2 = ctx.createOscillator(); 
             const gain = ctx.createGain();
 
             osc1.connect(gain);
@@ -133,12 +131,10 @@ const BreathingScreen = () => {
             osc1.type = 'sine';
             osc2.type = 'sine';
             
-            // Frequenze per un suono campanello chiaro
             osc1.frequency.setValueAtTime(800, t);
-            osc2.frequency.setValueAtTime(1200, t); // 3a armonica
+            osc2.frequency.setValueAtTime(1200, t); 
 
-            // Volume Envelope (Attacco immediato, decadimento lento)
-            // Usa lo stato dingVolume
+            // Volume Envelope
             gain.gain.setValueAtTime(0, t);
             gain.gain.linearRampToValueAtTime(dingVolume, t + 0.05); 
             gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2); 
@@ -151,14 +147,11 @@ const BreathingScreen = () => {
         } catch (e) {
             console.error("Synth errore:", e);
         }
-    }, [dingVolume]); // Dipende dal volume impostato
+    }, [dingVolume]);
 
     const playCue = React.useCallback(async () => {
-        // Suona solo se siamo in modalità guidata (closed eyes) e attivi
         if (mode !== 'closed' || !isActive) return;
-
-        // RIMOSSO IL DUCKING (abbassamento musica)
-        // La musica continua al suo volume, il ding suona sopra.
+        // RIMOSSO IL DUCKING
         playSynthDing();
     }, [mode, isActive, playSynthDing]);
 
@@ -203,7 +196,6 @@ const BreathingScreen = () => {
             setCycles(0);
             setIsActive(true);
             
-            // Inizializza/Sblocca audio context al click utente
             if (audioRef.current) {
                 audioRef.current.volume = musicVolume;
                 audioRef.current.play().catch(e => alert("Impossibile riprodurre musica. Verifica i permessi audio."));
