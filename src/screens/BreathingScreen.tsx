@@ -3,7 +3,6 @@ import React from 'react';
 import { LungIcon } from '../components/icons/LungIcon';
 import { EyeIcon } from '../components/icons/EyeIcon';
 import { EyeOffIcon } from '../components/icons/EyeOffIcon';
-import { XCircleIcon } from '../components/icons/XCircleIcon';
 
 const BreathingScreen = () => {
     const BREATHING_PATTERNS = {
@@ -26,8 +25,6 @@ const BreathingScreen = () => {
         { label: '30 Minuti', value: 1800 },
     ];
 
-    // File locale obbligatorio
-    const CUE_SOUND_URL = "audio/ding.mp3"; 
     const BASE_MUSIC_VOLUME = 0.2; 
 
     const [duration, setDuration] = React.useState(DURATION_OPTIONS[0].value);
@@ -39,12 +36,10 @@ const BreathingScreen = () => {
     const [instruction, setInstruction] = React.useState('Inizia');
     const [scale, setScale] = React.useState(0.6);
     const [mode, setMode] = React.useState<'open' | 'closed'>('open');
-    const [audioError, setAudioError] = React.useState<string | null>(null);
     
     const mainTimer = React.useRef<any>(null);
     const cycleTimer = React.useRef<any>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null); 
-    // const cueRef = React.useRef<HTMLAudioElement>(null); // RIMOSSO: Usiamo istanze volatili
     const audioCtxRef = React.useRef<AudioContext | null>(null);
 
     // Gestione cambio traccia musica
@@ -72,7 +67,6 @@ const BreathingScreen = () => {
         clearTimeout(cycleTimer.current);
         setInstruction('Inizia');
         setScale(0.6);
-        setAudioError(null);
         
         if (audioRef.current) {
             audioRef.current.pause();
@@ -102,86 +96,78 @@ const BreathingScreen = () => {
         return () => clearInterval(mainTimer.current);
     }, [isActive, timeLeft, stopExercise]);
 
-    // Generatore di suoni sintetici (Fallback se manca il file)
-    const playSynthDing = (onComplete?: () => void) => {
+    // --- NUOVO SINTH PURO (Zero File, Zero Problemi) ---
+    const playSynthDing = React.useCallback(async (onComplete?: () => void) => {
         try {
-            if (!audioCtxRef.current) {
-                audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            let ctx = audioCtxRef.current;
+            if (!ctx) {
+                ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                audioCtxRef.current = ctx;
             }
-            const ctx = audioCtxRef.current;
-            if (ctx.state === 'suspended') ctx.resume();
+            
+            if (ctx.state === 'suspended') {
+                await ctx.resume();
+            }
 
-            const osc = ctx.createOscillator();
+            const t = ctx.currentTime;
+
+            // Ding a 2 onde (più realistico e piacevole)
+            const osc1 = ctx.createOscillator(); // Tono Fondamentale
+            const osc2 = ctx.createOscillator(); // Armonica
             const gain = ctx.createGain();
 
-            osc.connect(gain);
+            osc1.connect(gain);
+            osc2.connect(gain);
             gain.connect(ctx.destination);
 
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1); 
-
-            // Volume più alto per il synth (0.5 è molto forte per un'onda pura)
-            gain.gain.setValueAtTime(0.5, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
-
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 1.5);
+            osc1.type = 'sine';
+            osc2.type = 'sine';
             
-            osc.onended = () => {
+            // Frequenze per un suono campanello chiaro
+            osc1.frequency.setValueAtTime(800, t);
+            osc2.frequency.setValueAtTime(1200, t); // 3a armonica (quinta perfetta sopra)
+
+            // Volume Envelope (Attacco immediato, decadimento lento)
+            // Volume alzato a 0.3 per essere ben udibile
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.05); 
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2); // Durata totale suono ca 1.2s
+
+            osc1.start(t);
+            osc2.start(t);
+            osc1.stop(t + 1.2);
+            osc2.stop(t + 1.2);
+            
+            // Quando l'oscillatore principale finisce, ripristina la musica
+            osc1.onended = () => {
                 if (onComplete) onComplete();
             };
-        } catch (e) {
-            console.error("Synth fallito", e);
-            if (onComplete) onComplete();
-        }
-    };
-
-    // --- LOGICA PLAY CUE "FRESH INSTANCE" ---
-    const playCue = React.useCallback(() => {
-        if (mode === 'closed') {
-            const musicEl = audioRef.current;
             
-            // 1. DUCKING: Musica a 0
-            if (musicEl) musicEl.volume = 0.0;
-
-            const restoreMusic = () => {
-                if (musicEl && isActive) {
-                    musicEl.volume = BASE_MUSIC_VOLUME;
-                }
-            };
-
-            // 2. Crea nuova istanza Audio (Bypassa problemi di buffer/decoder su file pesanti)
-            const ding = new Audio(CUE_SOUND_URL);
-            ding.volume = 1.0; // Max volume
-
-            // Gestione fine suono
-            ding.onended = () => {
-                restoreMusic();
-                // Non serve chiamare remove(), il garbage collector pulirà l'oggetto Audio
-            };
-
-            // Gestione errori (es. file non trovato) -> Fallback su Synth
-            ding.onerror = () => {
-                console.warn("Ding file error, switching to synth");
-                playSynthDing(restoreMusic);
-            };
-
-            // Riproduzione
-            ding.play().catch(e => {
-                console.warn("Autoplay ding bloccato o file mancante, uso synth", e);
-                // Se bloccato, prova il synth
-                playSynthDing(restoreMusic);
-            });
-
-            // 3. Safety Net: Se tutto si blocca, ripristina volume dopo 2.5s
-            setTimeout(() => {
-                if (musicEl && musicEl.volume === 0.0 && isActive) {
-                    musicEl.volume = BASE_MUSIC_VOLUME;
-                }
-            }, 2500);
+        } catch (e) {
+            console.error("Synth errore:", e);
+            if (onComplete) onComplete(); // Fallback per non bloccare la musica a 0
         }
-    }, [mode, isActive]);
+    }, []);
+
+    const playCue = React.useCallback(async () => {
+        // Suona solo se siamo in modalità guidata (closed eyes) e attivi
+        if (mode !== 'closed' || !isActive) return;
+
+        const musicEl = audioRef.current;
+        
+        // 1. Zittisci musica istantaneamente
+        if (musicEl) musicEl.volume = 0.0;
+
+        const restoreMusic = () => {
+            // 2. Ripristina musica quando il ding finisce
+            if (musicEl && isActive) {
+                musicEl.volume = BASE_MUSIC_VOLUME;
+            }
+        };
+
+        // 3. Suona il Synth
+        playSynthDing(restoreMusic);
+    }, [mode, isActive, playSynthDing]);
 
     React.useEffect(() => {
         if (!isActive) return;
@@ -223,14 +209,16 @@ const BreathingScreen = () => {
             setTimeLeft(duration);
             setCycles(0);
             setIsActive(true);
-            setAudioError(null);
             
-            // Sblocca audio context
+            // Inizializza/Sblocca audio context al click utente
             if (audioRef.current) {
                 audioRef.current.volume = BASE_MUSIC_VOLUME;
                 audioRef.current.play().catch(e => alert("Impossibile riprodurre musica. Verifica i permessi audio."));
             }
-            if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+            if (!audioCtxRef.current) {
+                audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            if (audioCtxRef.current.state === 'suspended') {
                 audioCtxRef.current.resume();
             }
         }
@@ -257,14 +245,6 @@ const BreathingScreen = () => {
                 
                 <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 mb-8 space-y-4">
                     
-                    {/* Error Display */}
-                    {audioError && (
-                        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm animate-pulse">
-                            <XCircleIcon className="w-5 h-5 flex-shrink-0" />
-                            <span>{audioError}</span>
-                        </div>
-                    )}
-
                     {/* Mode Selection */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
                         <label className="text-sm font-bold text-slate-600 uppercase flex items-center gap-2 pl-2">
